@@ -57,8 +57,6 @@ func main() {
 	app.Post("/upload", handlers.UploadHandler)
 	app.Get("/files", handlers.ListFilesHandler)
 	app.Get("/download/:uuid", handlers.DownloadHandler)
-	app.Delete("/files/:uuid", handlers.DeleteFileHandler)
-	app.Get("/thumbnail/:uuid", handlers.ThumbnailHandler)
 
 	// Serve Frontend
 	app.Use("/", filesystem.New(filesystem.Config{
