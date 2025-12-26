@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastNAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-8 flex items-center justify-between">
+            <h1 class="text-3xl font-bold text-blue-500">FastNAS</h1>
+            <div class="text-sm text-gray-400">Private Cloud Storage</div>
+        </header>
+
+        <!-- Upload Section -->
+        <section class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg">
+            <h2 class="text-xl font-semibold mb-4">Upload File</h2>
+            <form id="uploadForm" class="flex flex-col gap-4">
+                <div class="flex items-center justify-center w-full">
+                    <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-8 h-8 mb-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                            </svg>
+                            <p class="mb-2 text-sm text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs text-gray-400">Any file type (Streamed directly to disk)</p>
+                        </div>
+                        <input id="dropzone-file" type="file" class="hidden" name="file" required />
+                    </label>
+                </div>
+                <div id="file-info" class="hidden text-sm text-gray-300">Selected: <span id="filename"></span></div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    Upload
+                </button>
+            </form>
+            <div id="upload-status" class="mt-4 text-sm"></div>
+        </section>
+
+        <!-- File List -->
+        <section class="bg-gray-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold mb-4">Files</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-gray-400">
+                    <thead class="text-xs text-gray-400 uppercase bg-gray-700">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">Filename</th>
+                            <th scope="col" class="px-6 py-3">Size</th>
+                            <th scope="col" class="px-6 py-3">Type</th>
+                            <th scope="col" class="px-6 py-3">Date</th>
+                            <th scope="col" class="px-6 py-3">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="file-list">
+                        <!-- Files will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('dropzone-file');
+        const fileInfo = document.getElementById('file-info');
+        const filenameSpan = document.getElementById('filename');
+        const uploadStatus = document.getElementById('upload-status');
+        const fileList = document.getElementById('file-list');
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                filenameSpan.textContent = e.target.files[0].name;
+                fileInfo.classList.remove('hidden');
+            }
+        });
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(uploadForm);
+            
+            uploadStatus.textContent = 'Uploading...';
+            uploadStatus.className = 'mt-4 text-sm text-yellow-400';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    uploadStatus.textContent = 'Upload successful!';
+                    uploadStatus.className = 'mt-4 text-sm text-green-400';
+                    uploadForm.reset();
+                    fileInfo.classList.add('hidden');
+                    loadFiles();
+                } else {
+                    const error = await response.json();
+                    uploadStatus.textContent = 'Upload failed: ' + (error.error || 'Unknown error');
+                    uploadStatus.className = 'mt-4 text-sm text-red-400';
+                }
+            } catch (err) {
+                uploadStatus.textContent = 'Upload failed: ' + err.message;
+                uploadStatus.className = 'mt-4 text-sm text-red-400';
+            }
+        });
+
+        async function loadFiles() {
+            try {
+                const response = await fetch('/files');
+                const files = await response.json();
+                
+                fileList.innerHTML = files.map(file => `
+                    <tr class="bg-gray-800 border-b border-gray-700 hover:bg-gray-700">
+                        <td class="px-6 py-4 font-medium text-white break-all">
+                            ${file.Filename}
+                        </td>
+                        <td class="px-6 py-4">
+                            ${formatBytes(file.Size)}
+                        </td>
+                        <td class="px-6 py-4">
+                            ${file.MimeType}
+                        </td>
+                        <td class="px-6 py-4">
+                            ${new Date(file.CreatedAt).toLocaleString()}
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="/download/${file.UUID}" class="font-medium text-blue-500 hover:underline">Download</a>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load files:', err);
+            }
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        // Initial load
+        loadFiles();
+    </script>
+</body>
+</html>
