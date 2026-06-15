@@ -1,0 +1,18 @@
+# Normalize line endings to LF in the repository so tooling (gofmt, CI) is
+# consistent across Windows/Linux checkouts.
+* text=auto eol=lf
+
+*.go    text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.html  text eol=lf
+*.json  text eol=lf
+Dockerfile text eol=lf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.exe binary
