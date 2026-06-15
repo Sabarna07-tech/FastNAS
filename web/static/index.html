@@ -6,43 +6,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FastNAS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body class="bg-gray-900 text-gray-100 min-h-screen p-8">
     <div class="max-w-4xl mx-auto">
         <header class="mb-8 flex items-center justify-between">
             <h1 class="text-3xl font-bold text-blue-500">FastNAS</h1>
-            <div class="text-sm text-gray-400">Private Cloud Storage</div>
+            <div class="text-right">
+                <div class="text-sm text-gray-400">Private Cloud Storage</div>
+                <div id="current-user" class="text-xs text-gray-500 mt-1"></div>
+            </div>
         </header>
 
         <!-- Upload Section -->
         <section class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg">
-            <h2 class="text-xl font-semibold mb-4">Upload File</h2>
-            <form id="uploadForm" class="flex flex-col gap-4">
-                <div class="flex items-center justify-center w-full">
-                    <label for="dropzone-file"
-                        class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600">
-                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                            <svg class="w-8 h-8 mb-4 text-gray-400" aria-hidden="true"
-                                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
-                            </svg>
-                            <p class="mb-2 text-sm text-gray-400"><span class="font-semibold">Click to upload</span> or
-                                drag and drop</p>
-                            <p class="text-xs text-gray-400">Any file type (Streamed directly to disk)</p>
-                        </div>
-                        <input id="dropzone-file" type="file" class="hidden" name="file" required />
-                    </label>
-                </div>
-                <div id="file-info" class="hidden text-sm text-gray-300">Selected: <span id="filename"></span></div>
-                <button type="submit"
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                    Upload
-                </button>
-            </form>
-            <div id="upload-status" class="mt-4 text-sm"></div>
+            <h2 class="text-xl font-semibold mb-4">Upload Files</h2>
+            <div class="flex items-center justify-center w-full">
+                <label id="dropzone" for="dropzone-file"
+                    class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600 transition-colors">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
+                        <svg class="w-8 h-8 mb-4 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+                            fill="none" viewBox="0 0 20 16">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+                        </svg>
+                        <p class="mb-2 text-sm text-gray-400"><span class="font-semibold">Click to upload</span> or drag
+                            &amp; drop</p>
+                        <p class="text-xs text-gray-400">Multiple files supported · resumable · streamed to disk</p>
+                    </div>
+                    <input id="dropzone-file" type="file" class="hidden" multiple />
+                </label>
+            </div>
+            <div id="upload-queue" class="mt-4 space-y-3"></div>
         </section>
 
         <!-- Stats & Search -->
@@ -68,23 +64,58 @@
 
         <!-- File List -->
         <section class="bg-gray-800 rounded-lg p-6 shadow-lg">
-            <h2 class="text-xl font-semibold mb-4">Files</h2>
+            <div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
+                <!-- Breadcrumbs / search indicator -->
+                <nav id="breadcrumbs" class="text-sm text-gray-300 flex items-center gap-1 flex-wrap"></nav>
+                <div class="flex items-center gap-2">
+                    <button id="newFolderBtn"
+                        class="bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium py-2 px-3 rounded transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        New Folder
+                    </button>
+                    <button id="trashBtn"
+                        class="bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium py-2 px-3 rounded transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Trash
+                    </button>
+                    <button id="emptyTrashBtn"
+                        class="hidden bg-red-700 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded transition-colors">
+                        Empty Trash
+                    </button>
+                </div>
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm text-left text-gray-400">
                     <thead class="text-xs text-gray-400 uppercase bg-gray-700">
                         <tr>
-                            <th scope="col" class="px-6 py-3">Filename</th>
+                            <th scope="col" class="px-6 py-3">Name</th>
                             <th scope="col" class="px-6 py-3">Size</th>
                             <th scope="col" class="px-6 py-3">Type</th>
                             <th scope="col" class="px-6 py-3">Date</th>
-                            <th scope="col" class="px-6 py-3">Action</th>
-                            <th scope="col" class="px-6 py-3"></th>
+                            <th scope="col" class="px-6 py-3">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="file-list">
-                        <!-- Files will be populated here -->
+                        <!-- Folders and files will be populated here -->
                     </tbody>
                 </table>
+                <div id="empty-state" class="hidden text-center text-gray-500 py-10">This folder is empty.</div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination" class="hidden mt-4 flex items-center justify-between text-sm text-gray-400">
+                <span id="page-info"></span>
+                <div class="flex gap-2">
+                    <button id="prevPage"
+                        class="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-1 px-3 rounded">Prev</button>
+                    <button id="nextPage"
+                        class="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-1 px-3 rounded">Next</button>
+                </div>
             </div>
         </section>
     </div>
@@ -104,100 +135,553 @@
         </div>
     </div>
 
+    <!-- Move Modal -->
+    <div id="moveModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-70 flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h3 id="moveTitle" class="text-lg font-semibold mb-4 text-white break-all">Move to:</h3>
+            <select id="moveSelect"
+                class="block w-full p-2 text-sm text-white border border-gray-600 rounded-lg bg-gray-700 focus:ring-blue-500 focus:border-blue-500 mb-4"></select>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeMove()"
+                    class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded">Cancel</button>
+                <button onclick="confirmMove()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded">Move</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="shareModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-70 flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">Share link</h3>
+                <button onclick="closeShare()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <div class="flex items-end gap-2 mb-4">
+                <div class="flex-1">
+                    <label class="block text-xs text-gray-400 mb-1">Expires</label>
+                    <select id="shareExpiry"
+                        class="block w-full p-2 text-sm text-white border border-gray-600 rounded-lg bg-gray-700 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="0">Never</option>
+                        <option value="3600">In 1 hour</option>
+                        <option value="86400">In 1 day</option>
+                        <option value="604800">In 7 days</option>
+                    </select>
+                </div>
+                <button onclick="createShare()"
+                    class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded">Create link</button>
+            </div>
+            <div id="shareList" class="space-y-2 max-h-64 overflow-auto"></div>
+        </div>
+    </div>
+
     <script>
-        const uploadForm = document.getElementById('uploadForm');
         const fileInput = document.getElementById('dropzone-file');
-        const fileInfo = document.getElementById('file-info');
-        const filenameSpan = document.getElementById('filename');
-        const uploadStatus = document.getElementById('upload-status');
+        const dropzone = document.getElementById('dropzone');
+        const uploadQueueEl = document.getElementById('upload-queue');
         const fileList = document.getElementById('file-list');
 
+        // --- Resumable, chunked, multi-file uploader ---
+
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+        const MAX_RETRIES = 5;
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // localStorage key identifying a file so an interrupted upload can resume.
+        function resumeKey(file, folder) {
+            return `fastnas-upload:${folder}:${file.name}:${file.size}:${file.lastModified}`;
+        }
+
+        // File selection + drag & drop
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                filenameSpan.textContent = e.target.files[0].name;
-                fileInfo.classList.remove('hidden');
-            }
+            if (e.target.files.length) enqueueFiles(Array.from(e.target.files));
+            fileInput.value = ''; // allow re-selecting the same file
         });
-
-        uploadForm.addEventListener('submit', async (e) => {
+        ['dragenter', 'dragover'].forEach(evt => dropzone.addEventListener(evt, (e) => {
             e.preventDefault();
-            const formData = new FormData(uploadForm);
-
-            uploadStatus.textContent = 'Uploading...';
-            uploadStatus.className = 'mt-4 text-sm text-yellow-400';
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    uploadStatus.textContent = 'Upload successful!';
-                    uploadStatus.className = 'mt-4 text-sm text-green-400';
-                    uploadForm.reset();
-                    fileInfo.classList.add('hidden');
-                    loadFiles();
-                } else {
-                    const error = await response.json();
-                    uploadStatus.textContent = 'Upload failed: ' + (error.error || 'Unknown error');
-                    uploadStatus.className = 'mt-4 text-sm text-red-400';
-                }
-            } catch (err) {
-                uploadStatus.textContent = 'Upload failed: ' + err.message;
-                uploadStatus.className = 'mt-4 text-sm text-red-400';
-            }
+            dropzone.classList.add('border-blue-500', 'bg-gray-600');
+        }));
+        ['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-blue-500', 'bg-gray-600');
+        }));
+        dropzone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer && e.dataTransfer.files;
+            if (files && files.length) enqueueFiles(Array.from(files));
         });
+
+        let uploading = false;
+        const queue = [];
+
+        function enqueueFiles(files) {
+            files.forEach(file => queue.push({ file, folder: state.folder }));
+            processQueue();
+        }
+
+        async function processQueue() {
+            if (uploading) return;
+            uploading = true;
+            let uploadedAny = false;
+            while (queue.length) {
+                const job = queue.shift();
+                try {
+                    await uploadFile(job.file, job.folder);
+                    uploadedAny = true;
+                } catch (err) {
+                    console.error('Upload error:', err);
+                }
+            }
+            uploading = false;
+            if (uploadedAny) refresh();
+        }
+
+        function createUploadItemUI(name) {
+            const wrap = document.createElement('div');
+            wrap.className = 'bg-gray-700 rounded-lg p-3';
+            wrap.innerHTML = `
+                <div class="flex items-center justify-between text-sm mb-2">
+                    <span class="text-gray-200 break-all pr-2">${escapeHtml(name)}</span>
+                    <span class="status text-gray-400 whitespace-nowrap"></span>
+                </div>
+                <div class="w-full bg-gray-600 rounded-full h-2">
+                    <div class="bar bg-blue-500 h-2 rounded-full transition-all" style="width:0%"></div>
+                </div>`;
+            uploadQueueEl.appendChild(wrap);
+            const bar = wrap.querySelector('.bar');
+            const status = wrap.querySelector('.status');
+            return {
+                progress(loaded, total) {
+                    const pct = total ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+                    bar.style.width = pct + '%';
+                    status.textContent = `${pct}% · ${formatBytes(loaded)} / ${formatBytes(total)}`;
+                    status.className = 'status text-yellow-400 whitespace-nowrap';
+                },
+                done() {
+                    bar.style.width = '100%';
+                    bar.classList.replace('bg-blue-500', 'bg-green-500');
+                    status.textContent = 'Done';
+                    status.className = 'status text-green-400 whitespace-nowrap';
+                    setTimeout(() => wrap.remove(), 4000);
+                },
+                fail(msg) {
+                    bar.classList.replace('bg-blue-500', 'bg-red-500');
+                    status.textContent = msg || 'Failed';
+                    status.className = 'status text-red-400 whitespace-nowrap';
+                },
+            };
+        }
+
+        // Send one chunk via XHR so we get fine-grained upload progress.
+        function sendChunk(sessionId, offset, blob, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PATCH', `/uploads/${sessionId}`);
+                xhr.setRequestHeader('Upload-Offset', String(offset));
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) onProgress(offset + e.loaded);
+                };
+                xhr.onload = () => {
+                    let body = {};
+                    try { body = JSON.parse(xhr.responseText); } catch (_) { }
+                    resolve({ status: xhr.status, body });
+                };
+                xhr.onerror = () => reject(new Error('network error'));
+                xhr.ontimeout = () => reject(new Error('timeout'));
+                xhr.send(blob);
+            });
+        }
+
+        async function uploadFile(file, folder) {
+            const ui = createUploadItemUI(file.name);
+            const key = resumeKey(file, folder);
+            let sessionId = null;
+            let offset = 0;
+
+            // Try to resume a previous session for this exact file.
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                try {
+                    const r = await fetch(`/uploads/${stored}`);
+                    if (r.ok) {
+                        const s = await r.json();
+                        sessionId = s.id;
+                        offset = s.uploaded || 0;
+                    }
+                } catch (_) { /* fall through to a fresh session */ }
+            }
+
+            // Start a fresh session if we couldn't resume.
+            if (!sessionId) {
+                try {
+                    const r = await fetch('/uploads', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            filename: file.name,
+                            size: file.size,
+                            mimeType: file.type || 'application/octet-stream',
+                            folder,
+                        }),
+                    });
+                    if (!r.ok) {
+                        const e = await r.json().catch(() => ({}));
+                        ui.fail(e.error || 'Could not start upload');
+                        return;
+                    }
+                    const s = await r.json();
+                    sessionId = s.id;
+                    offset = s.uploaded || 0;
+                    localStorage.setItem(key, sessionId);
+                } catch (err) {
+                    ui.fail('Could not start upload');
+                    return;
+                }
+            }
+
+            ui.progress(offset, file.size);
+
+            // Upload remaining chunks, retrying transient failures.
+            while (offset < file.size) {
+                const end = Math.min(offset + CHUNK_SIZE, file.size);
+                const chunk = file.slice(offset, end);
+                let attempt = 0;
+                let advanced = false;
+
+                while (!advanced) {
+                    try {
+                        const res = await sendChunk(sessionId, offset, chunk, (loaded) => ui.progress(loaded, file.size));
+                        if (res.status === 409) {
+                            // Server is ahead/behind: resync to its offset.
+                            offset = res.body.uploaded || 0;
+                            advanced = true;
+                        } else if (res.status >= 200 && res.status < 300) {
+                            offset = res.body.uploaded || end;
+                            advanced = true;
+                        } else if (res.status === 404) {
+                            // Session expired server-side; restart from scratch.
+                            localStorage.removeItem(key);
+                            ui.fail('Session expired — please retry');
+                            return;
+                        } else {
+                            throw new Error('chunk rejected (' + res.status + ')');
+                        }
+                    } catch (err) {
+                        attempt++;
+                        if (attempt >= MAX_RETRIES) {
+                            ui.fail('Upload failed (network)');
+                            return;
+                        }
+                        await sleep(500 * attempt); // linear backoff
+                    }
+                }
+                ui.progress(offset, file.size);
+            }
+
+            // Finalize.
+            try {
+                const r = await fetch(`/uploads/${sessionId}/complete`, { method: 'POST' });
+                if (!r.ok) {
+                    ui.fail('Finalize failed');
+                    return;
+                }
+                localStorage.removeItem(key);
+                ui.done();
+            } catch (err) {
+                ui.fail('Finalize failed');
+            }
+        }
 
         const searchInput = document.getElementById('searchInput');
-        let allFiles = [];
+        const breadcrumbsEl = document.getElementById('breadcrumbs');
+        const emptyState = document.getElementById('empty-state');
+        const pagination = document.getElementById('pagination');
+        const pageInfo = document.getElementById('page-info');
+        const prevPageBtn = document.getElementById('prevPage');
+        const nextPageBtn = document.getElementById('nextPage');
+        const newFolderBtn = document.getElementById('newFolderBtn');
+        const trashBtn = document.getElementById('trashBtn');
+        const emptyTrashBtn = document.getElementById('emptyTrashBtn');
 
-        searchInput.addEventListener('input', (e) => {
-            renderFiles(e.target.value);
-        });
+        // Navigation / view state
+        const state = {
+            folder: '',  // current folder UUID ('' = root)
+            query: '',   // active search query
+            page: 1,
+            trash: false, // viewing the trash?
+        };
 
-        async function loadFiles() {
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, s => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]
+            ));
+        }
+
+        // refresh re-fetches the current view (files or trash) and the global stats.
+        function refresh() {
+            return Promise.all([state.trash ? fetchTrash() : fetchListing(), loadStats()]);
+        }
+
+        async function fetchListing() {
+            const params = new URLSearchParams({ page: state.page });
+            if (state.query) {
+                params.set('q', state.query);
+            } else if (state.folder) {
+                params.set('folder', state.folder);
+            }
             try {
-                const response = await fetch('/files');
-                allFiles = await response.json();
-                renderFiles();
+                const response = await fetch(`/files?${params.toString()}`);
+                if (!response.ok) throw new Error('request failed');
+                const data = await response.json();
+                renderListing(data);
             } catch (err) {
                 console.error('Failed to load files:', err);
             }
         }
 
-        function renderFiles(query = '') {
-            const filtered = allFiles.filter(f => f.Filename.toLowerCase().includes(query.toLowerCase()));
+        async function loadStats() {
+            try {
+                const response = await fetch('/stats');
+                if (!response.ok) return;
+                const stats = await response.json();
+                document.getElementById('total-files').textContent = stats.totalFiles;
+                document.getElementById('total-size').textContent = formatBytes(stats.totalSize);
+            } catch (err) {
+                console.error('Failed to load stats:', err);
+            }
+        }
 
-            // Update Stats
-            document.getElementById('total-files').textContent = allFiles.length; // Always show total count
-            document.getElementById('total-size').textContent = formatBytes(allFiles.reduce((acc, f) => acc + f.Size, 0));
+        function renderBreadcrumbs(data) {
+            if (state.query) {
+                breadcrumbsEl.innerHTML =
+                    `<span class="text-gray-400">Search results for</span>&nbsp;<span class="text-white font-medium">"${escapeHtml(state.query)}"</span>`;
+                return;
+            }
+            const parts = [`<button class="hover:text-blue-400" onclick="navigateTo('')">Home</button>`];
+            (data.breadcrumbs || []).forEach((crumb, idx, arr) => {
+                const isLast = idx === arr.length - 1;
+                parts.push('<span class="text-gray-600">/</span>');
+                if (isLast) {
+                    parts.push(`<span class="text-white font-medium">${escapeHtml(crumb.name)}</span>`);
+                } else {
+                    parts.push(`<button class="hover:text-blue-400" onclick="navigateTo('${crumb.uuid}')">${escapeHtml(crumb.name)}</button>`);
+                }
+            });
+            breadcrumbsEl.innerHTML = parts.join(' ');
+        }
 
-            fileList.innerHTML = filtered.map(file => `
-                <tr class="bg-gray-800 border-b border-gray-700 hover:bg-gray-600 transition-colors cursor-pointer group" onclick="openPreview('${file.UUID}', '${file.MimeType}', '${file.Filename}')">
+        // Cache of the currently displayed items, keyed by UUID, so action
+        // handlers only need a UUID in the markup (no names in onclick attrs).
+        let currentFolders = {};
+        let currentFiles = {};
+
+        const actionBtn = (label, color, fn) =>
+            `<button onclick="${fn}" class="font-medium ${color} hover:opacity-80 z-10 relative">${label}</button>`;
+
+        function renderListing(data) {
+            renderBreadcrumbs(data);
+
+            const folders = data.folders || [];
+            const files = data.files || [];
+            currentFolders = {};
+            currentFiles = {};
+            folders.forEach(f => currentFolders[f.UUID] = f);
+            files.forEach(f => currentFiles[f.UUID] = f);
+
+            const folderRows = folders.map(folder => `
+                <tr class="bg-gray-800 border-b border-gray-700 hover:bg-gray-600 transition-colors cursor-pointer group" onclick="navigateTo('${folder.UUID}')">
+                    <td class="px-6 py-4 font-medium text-white break-all flex items-center gap-4">
+                        <div class="flex-shrink-0">
+                            <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
+                        </div>
+                        <span class="group-hover:text-blue-400 transition-colors">${escapeHtml(folder.Name)}</span>
+                    </td>
+                    <td class="px-6 py-4">—</td>
+                    <td class="px-6 py-4 text-xs text-gray-500">Folder</td>
+                    <td class="px-6 py-4">${new Date(folder.CreatedAt).toLocaleDateString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap space-x-3" onclick="event.stopPropagation()">
+                        ${actionBtn('Rename', 'text-gray-300', `renameFolder('${folder.UUID}')`)}
+                        ${actionBtn('Move', 'text-gray-300', `moveItem('folder','${folder.UUID}')`)}
+                        ${actionBtn('Delete', 'text-red-500', `deleteFolder('${folder.UUID}')`)}
+                    </td>
+                </tr>
+            `).join('');
+
+            const fileRows = files.map(file => `
+                <tr class="bg-gray-800 border-b border-gray-700 hover:bg-gray-600 transition-colors cursor-pointer group" onclick="openFilePreview('${file.UUID}')">
                     <td class="px-6 py-4 font-medium text-white break-all flex items-center gap-4">
                         <div class="flex-shrink-0">
                             ${getFileIcon(file.Filename, file.MimeType, file.UUID)}
                         </div>
-                        <span class="group-hover:text-blue-400 transition-colors">${file.Filename}</span>
+                        <span class="group-hover:text-blue-400 transition-colors">${escapeHtml(file.Filename)}</span>
                     </td>
-                    <td class="px-6 py-4">
-                        ${formatBytes(file.Size)}
-                    </td>
-                    <td class="px-6 py-4 text-xs text-gray-500">
-                        ${file.MimeType && file.MimeType.length < 20 ? file.MimeType : 'file'}
-                    </td>
-                    <td class="px-6 py-4">
-                        ${new Date(file.CreatedAt).toLocaleDateString()}
-                    </td>
-                    <td class="px-6 py-4" onclick="event.stopPropagation()">
+                    <td class="px-6 py-4">${formatBytes(file.Size)}</td>
+                    <td class="px-6 py-4 text-xs text-gray-500">${file.MimeType && file.MimeType.length < 20 ? escapeHtml(file.MimeType) : 'file'}</td>
+                    <td class="px-6 py-4">${new Date(file.CreatedAt).toLocaleDateString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap space-x-3" onclick="event.stopPropagation()">
                         <a href="/download/${file.UUID}" class="font-medium text-blue-500 hover:text-blue-400 z-10 relative">Download</a>
-                    </td>
-                    <td class="px-6 py-4" onclick="event.stopPropagation()">
-                        <button onclick="deleteFile('${file.UUID}')" class="font-medium text-red-500 hover:text-red-400 z-10 relative">Delete</button>
+                        ${actionBtn('Share', 'text-green-400', `shareFile('${file.UUID}')`)}
+                        ${actionBtn('Move', 'text-gray-300', `moveItem('file','${file.UUID}')`)}
+                        ${actionBtn('Rename', 'text-gray-300', `renameFile('${file.UUID}')`)}
+                        ${actionBtn('Delete', 'text-red-500', `deleteFile('${file.UUID}')`)}
                     </td>
                 </tr>
             `).join('');
+
+            fileList.innerHTML = folderRows + fileRows;
+            emptyState.classList.toggle('hidden', folders.length > 0 || files.length > 0);
+
+            // Pagination (applies to files only)
+            const totalPages = data.totalPages || 0;
+            if (totalPages > 1) {
+                pagination.classList.remove('hidden');
+                pageInfo.textContent = `Page ${data.page} of ${totalPages} · ${data.total} file${data.total === 1 ? '' : 's'}`;
+                prevPageBtn.disabled = data.page <= 1;
+                nextPageBtn.disabled = data.page >= totalPages;
+            } else {
+                pagination.classList.add('hidden');
+            }
+        }
+
+        // --- navigation actions ---
+
+        function navigateTo(folderUUID) {
+            state.folder = folderUUID || '';
+            state.query = '';
+            state.page = 1;
+            searchInput.value = '';
+            fetchListing();
+        }
+
+        let searchTimer = null;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                state.query = e.target.value.trim();
+                state.page = 1;
+                fetchListing();
+            }, 300);
+        });
+
+        prevPageBtn.addEventListener('click', () => {
+            if (state.page > 1) { state.page--; fetchListing(); }
+        });
+        nextPageBtn.addEventListener('click', () => {
+            state.page++; fetchListing();
+        });
+
+        newFolderBtn.addEventListener('click', async () => {
+            const name = prompt('Folder name:');
+            if (!name || !name.trim()) return;
+            try {
+                const response = await fetch('/folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name.trim(), parent: state.folder }),
+                });
+                if (response.ok) {
+                    if (state.query) navigateTo(state.folder); else fetchListing();
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    alert('Failed to create folder: ' + (error.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error creating folder: ' + err.message);
+            }
+        });
+
+        // --- trash ---
+
+        trashBtn.addEventListener('click', () => {
+            if (state.trash) { exitTrash(); } else { enterTrash(); }
+        });
+        emptyTrashBtn.addEventListener('click', emptyTrash);
+
+        function enterTrash() {
+            state.trash = true;
+            state.query = '';
+            searchInput.value = '';
+            trashBtn.textContent = 'Back to Files';
+            newFolderBtn.classList.add('hidden');
+            emptyTrashBtn.classList.remove('hidden');
+            fetchTrash();
+        }
+
+        function exitTrash() {
+            state.trash = false;
+            trashBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Trash`;
+            newFolderBtn.classList.remove('hidden');
+            emptyTrashBtn.classList.add('hidden');
+            fetchListing();
+        }
+
+        async function fetchTrash() {
+            pagination.classList.add('hidden');
+            breadcrumbsEl.innerHTML = '<span class="text-white font-medium">Trash</span>';
+            try {
+                const r = await fetch('/trash');
+                const files = r.ok ? await r.json() : [];
+                currentFolders = {};
+                currentFiles = {};
+                files.forEach(f => currentFiles[f.UUID] = f);
+                fileList.innerHTML = files.map(file => `
+                    <tr class="bg-gray-800 border-b border-gray-700 hover:bg-gray-600 transition-colors">
+                        <td class="px-6 py-4 font-medium text-white break-all flex items-center gap-4">
+                            <div class="flex-shrink-0">${getFileIcon(file.Filename, file.MimeType, file.UUID)}</div>
+                            <span>${escapeHtml(file.Filename)}</span>
+                        </td>
+                        <td class="px-6 py-4">${formatBytes(file.Size)}</td>
+                        <td class="px-6 py-4 text-xs text-gray-500">Deleted ${file.DeletedAt ? new Date(file.DeletedAt).toLocaleDateString() : ''}</td>
+                        <td class="px-6 py-4"></td>
+                        <td class="px-6 py-4 whitespace-nowrap space-x-3">
+                            ${actionBtn('Restore', 'text-green-400', `restoreFile('${file.UUID}')`)}
+                            ${actionBtn('Delete forever', 'text-red-500', `purgeFile('${file.UUID}')`)}
+                        </td>
+                    </tr>
+                `).join('');
+                emptyState.classList.toggle('hidden', files.length > 0);
+            } catch (err) {
+                console.error('Failed to load trash:', err);
+            }
+        }
+
+        async function restoreFile(uuid) {
+            try {
+                const r = await fetch(`/files/${uuid}/restore`, { method: 'POST' });
+                if (r.ok) refresh(); else alert('Failed to restore');
+            } catch (err) { alert('Error: ' + err.message); }
+        }
+
+        async function purgeFile(uuid) {
+            if (!confirm('Permanently delete this file? This cannot be undone.')) return;
+            try {
+                const r = await fetch(`/trash/${uuid}`, { method: 'DELETE' });
+                if (r.ok) refresh(); else alert('Failed to delete');
+            } catch (err) { alert('Error: ' + err.message); }
+        }
+
+        async function emptyTrash() {
+            if (!confirm('Permanently delete ALL files in the trash? This cannot be undone.')) return;
+            try {
+                const r = await fetch('/trash', { method: 'DELETE' });
+                if (r.ok) refresh(); else alert('Failed to empty trash');
+            } catch (err) { alert('Error: ' + err.message); }
+        }
+
+        async function deleteFolder(uuid) {
+            const folder = currentFolders[uuid];
+            const name = folder ? folder.Name : 'this folder';
+            if (!confirm(`Delete folder "${name}" and all its contents? This cannot be undone.`)) return;
+            try {
+                const response = await fetch(`/folders/${uuid}`, { method: 'DELETE' });
+                if (response.ok) {
+                    refresh();
+                } else {
+                    alert('Failed to delete folder');
+                }
+            } catch (err) {
+                console.error('Error deleting folder:', err);
+                alert('Error deleting folder');
+            }
         }
 
         function getFileIcon(filename, mime) {
@@ -234,13 +718,230 @@
             try {
                 const response = await fetch(`/files/${uuid}`, { method: 'DELETE' });
                 if (response.ok) {
-                    loadFiles();
+                    refresh();
                 } else {
                     alert('Failed to delete file');
                 }
             } catch (err) {
                 console.error('Error deleting file:', err);
                 alert('Error deleting file');
+            }
+        }
+
+        function openFilePreview(uuid) {
+            const file = currentFiles[uuid];
+            if (file) openPreview(file.UUID, file.MimeType, file.Filename, file.Size);
+        }
+
+        const TEXT_EXTS = ['txt', 'md', 'markdown', 'json', 'xml', 'yaml', 'yml', 'csv', 'log',
+            'js', 'ts', 'jsx', 'tsx', 'css', 'html', 'htm', 'go', 'py', 'java', 'c', 'cpp', 'h',
+            'rb', 'rs', 'sh', 'sql', 'ini', 'toml', 'conf', 'env'];
+        const MAX_TEXT_PREVIEW = 2 * 1024 * 1024; // 2 MB
+
+        function isTextLike(mime, filename) {
+            if (mime && mime.startsWith('text/')) return true;
+            const ext = filename.split('.').pop().toLowerCase();
+            return TEXT_EXTS.includes(ext);
+        }
+
+        // --- rename ---
+
+        async function renameFile(uuid) {
+            const file = currentFiles[uuid];
+            if (!file) return;
+            const name = prompt('Rename file to:', file.Filename);
+            if (name === null) return;
+            await patchAndRefresh(`/files/${uuid}`, { filename: name.trim() });
+        }
+
+        async function renameFolder(uuid) {
+            const folder = currentFolders[uuid];
+            if (!folder) return;
+            const name = prompt('Rename folder to:', folder.Name);
+            if (name === null) return;
+            await patchAndRefresh(`/folders/${uuid}`, { name: name.trim() });
+        }
+
+        async function patchAndRefresh(url, body) {
+            try {
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (response.ok) {
+                    refresh();
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    alert('Failed: ' + (error.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        // --- move ---
+
+        const moveModal = document.getElementById('moveModal');
+        const moveSelect = document.getElementById('moveSelect');
+        const moveTitle = document.getElementById('moveTitle');
+        let moveTarget = null; // { type: 'file'|'folder', uuid }
+
+        // Builds "Parent / Child / ..." display paths from the flat folder list.
+        function buildFolderPaths(folders) {
+            const byId = {};
+            folders.forEach(f => byId[f.UUID] = f);
+            const pathOf = (f) => {
+                const names = [];
+                let node = f, guard = 0;
+                while (node && guard++ < 100) {
+                    names.unshift(node.Name);
+                    node = node.ParentID ? byId[node.ParentID] : null;
+                }
+                return names.join(' / ');
+            };
+            return folders.map(f => ({ uuid: f.UUID, path: pathOf(f), parentId: f.ParentID || null }));
+        }
+
+        // Returns the set of folder UUIDs that are `root` or nested beneath it.
+        function descendantSet(rootUUID, paths) {
+            const childrenOf = {};
+            paths.forEach(p => {
+                (childrenOf[p.parentId || ''] = childrenOf[p.parentId || ''] || []).push(p.uuid);
+            });
+            const result = new Set([rootUUID]);
+            const stack = [rootUUID];
+            while (stack.length) {
+                const cur = stack.pop();
+                (childrenOf[cur] || []).forEach(child => { result.add(child); stack.push(child); });
+            }
+            return result;
+        }
+
+        async function moveItem(type, uuid) {
+            moveTarget = { type, uuid };
+            const name = type === 'folder' ? (currentFolders[uuid] || {}).Name : (currentFiles[uuid] || {}).Filename;
+            moveTitle.textContent = `Move "${name || ''}" to:`;
+
+            let folders = [];
+            try {
+                const r = await fetch('/folders');
+                if (r.ok) folders = await r.json();
+            } catch (_) { }
+
+            const paths = buildFolderPaths(folders).sort((a, b) => a.path.localeCompare(b.path));
+            // When moving a folder, exclude itself and its descendants.
+            const excluded = type === 'folder' ? descendantSet(uuid, paths) : new Set();
+
+            const options = ['<option value="">Home (root)</option>'];
+            paths.forEach(p => {
+                if (!excluded.has(p.uuid)) {
+                    options.push(`<option value="${p.uuid}">${escapeHtml(p.path)}</option>`);
+                }
+            });
+            moveSelect.innerHTML = options.join('');
+            moveModal.classList.remove('hidden');
+        }
+
+        function closeMove() {
+            moveModal.classList.add('hidden');
+            moveTarget = null;
+        }
+
+        async function confirmMove() {
+            if (!moveTarget) return;
+            const dest = moveSelect.value;
+            const url = moveTarget.type === 'folder' ? `/folders/${moveTarget.uuid}` : `/files/${moveTarget.uuid}`;
+            const body = moveTarget.type === 'folder' ? { parent: dest } : { folder: dest };
+            closeMove();
+            await patchAndRefresh(url, body);
+        }
+
+        // --- share ---
+
+        const shareModal = document.getElementById('shareModal');
+        const shareList = document.getElementById('shareList');
+        const shareExpiry = document.getElementById('shareExpiry');
+        let shareFileUUID = null;
+
+        function shareUrl(token) {
+            return `${window.location.origin}/shares/${token}`;
+        }
+
+        async function shareFile(uuid) {
+            shareFileUUID = uuid;
+            shareModal.classList.remove('hidden');
+            await loadShares();
+        }
+
+        function closeShare() {
+            shareModal.classList.add('hidden');
+            shareFileUUID = null;
+        }
+
+        async function loadShares() {
+            shareList.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+            try {
+                const r = await fetch(`/files/${shareFileUUID}/shares`);
+                const shares = r.ok ? await r.json() : [];
+                if (!shares.length) {
+                    shareList.innerHTML = '<p class="text-gray-500 text-sm">No active links.</p>';
+                    return;
+                }
+                shareList.innerHTML = shares.map(s => {
+                    const url = shareUrl(s.token);
+                    const exp = s.expiresAt ? `Expires ${new Date(s.expiresAt).toLocaleString()}` : 'Never expires';
+                    return `
+                        <div class="bg-gray-700 rounded p-2 flex items-center justify-between gap-2 text-sm">
+                            <div class="min-w-0">
+                                <div class="text-blue-300 truncate">${escapeHtml(url)}</div>
+                                <div class="text-xs text-gray-400">${exp}</div>
+                            </div>
+                            <div class="flex gap-2 flex-shrink-0">
+                                <button onclick="copyText('${escapeHtml(url)}')" class="text-gray-300 hover:text-white">Copy</button>
+                                <button onclick="revokeShare('${s.token}')" class="text-red-400 hover:text-red-300">Revoke</button>
+                            </div>
+                        </div>`;
+                }).join('');
+            } catch (err) {
+                shareList.innerHTML = '<p class="text-red-400 text-sm">Failed to load links.</p>';
+            }
+        }
+
+        async function createShare() {
+            const expiresIn = parseInt(shareExpiry.value, 10) || 0;
+            try {
+                const r = await fetch(`/files/${shareFileUUID}/shares`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expiresIn }),
+                });
+                if (!r.ok) { alert('Failed to create link'); return; }
+                const share = await r.json();
+                await loadShares();
+                copyText(shareUrl(share.token));
+            } catch (err) {
+                alert('Error creating link: ' + err.message);
+            }
+        }
+
+        async function revokeShare(token) {
+            try {
+                const r = await fetch(`/shares/${token}`, { method: 'DELETE' });
+                if (r.ok) loadShares(); else alert('Failed to revoke');
+            } catch (err) {
+                alert('Error revoking: ' + err.message);
+            }
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(
+                    () => { },
+                    () => prompt('Copy this link:', text)
+                );
+            } else {
+                prompt('Copy this link:', text);
             }
         }
 
@@ -253,8 +954,22 @@
             return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
         }
 
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/me');
+                if (!response.ok) return;
+                const me = await response.json();
+                const el = document.getElementById('current-user');
+                const label = me.local ? `${me.email} (local)` : (me.name ? `${me.name} · ${me.email}` : me.email);
+                el.textContent = `Signed in as ${label}`;
+            } catch (err) {
+                console.error('Failed to load current user:', err);
+            }
+        }
+
         // Initial load
-        loadFiles();
+        loadCurrentUser();
+        refresh();
 
         const modal = document.getElementById('previewModal');
         const previewContent = document.getElementById('previewContent');
@@ -266,37 +981,57 @@
 
         // Close on escape
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closePreview();
+            if (e.key === 'Escape') { closePreview(); closeMove(); closeShare(); }
         });
 
         // Close on clicking outside
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closePreview();
         });
+        moveModal.addEventListener('click', (e) => { if (e.target === moveModal) closeMove(); });
+        shareModal.addEventListener('click', (e) => { if (e.target === shareModal) closeShare(); });
 
-        function openPreview(uuid, mime, filename) {
+        function openPreview(uuid, mime, filename, size) {
             const url = `/download/${uuid}?preview=true`;
-            let content = '';
+            mime = mime || '';
 
             if (mime.startsWith('image/')) {
-                content = `<img src="${url}" class="max-w-full max-h-full object-contain" alt="${filename}">`;
+                previewContent.innerHTML = `<img src="${url}" class="max-w-full max-h-full object-contain" alt="${escapeHtml(filename)}">`;
             } else if (mime.startsWith('video/')) {
-                content = `<video src="${url}" controls autoplay class="max-w-full max-h-full outline-none"></video>`;
+                previewContent.innerHTML = `<video src="${url}" controls autoplay class="max-w-full max-h-full outline-none"></video>`;
             } else if (mime.startsWith('audio/')) {
-                content = `<audio src="${url}" controls autoplay class="w-full max-w-md"></audio>`;
+                previewContent.innerHTML = `<audio src="${url}" controls autoplay class="w-full max-w-md"></audio>`;
             } else if (mime === 'application/pdf') {
-                content = `<iframe src="${url}" class="w-full h-full border-none bg-white"></iframe>`;
+                previewContent.innerHTML = `<iframe src="${url}" class="w-full h-full border-none bg-white"></iframe>`;
+            } else if (isTextLike(mime, filename) && (!size || size <= MAX_TEXT_PREVIEW)) {
+                previewContent.innerHTML = '<p class="text-gray-400">Loading…</p>';
+                renderTextPreview(url, filename);
             } else {
-                content = `
+                previewContent.innerHTML = `
                     <div class="text-center">
                         <p class="mb-4 text-xl text-gray-400">Preview not available for this file type.</p>
                         <a href="${url}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Download File</a>
-                    </div>
-                `;
+                    </div>`;
             }
 
-            previewContent.innerHTML = content;
             modal.classList.remove('hidden');
+        }
+
+        async function renderTextPreview(url, filename) {
+            try {
+                const text = await (await fetch(url)).text();
+                const ext = filename.split('.').pop().toLowerCase();
+                if ((ext === 'md' || ext === 'markdown') && window.marked) {
+                    // Rendered markdown (owner-only preview; treats own content as trusted).
+                    previewContent.innerHTML =
+                        `<div class="bg-white text-gray-900 rounded-lg p-6 max-w-3xl w-full max-h-full overflow-auto">${window.marked.parse(text)}</div>`;
+                } else {
+                    previewContent.innerHTML =
+                        `<pre class="bg-gray-950 text-gray-100 rounded-lg p-4 max-w-full max-h-full overflow-auto text-sm whitespace-pre-wrap break-words">${escapeHtml(text)}</pre>`;
+                }
+            } catch (err) {
+                previewContent.innerHTML = '<p class="text-red-400">Failed to load preview.</p>';
+            }
         }
     </script>
 </body>
