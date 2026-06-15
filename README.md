@@ -10,9 +10,13 @@ FastNAS is a **single-binary, private cloud storage system** that runs over a pr
 
 *   **Zero Configuration**: Runs with a single environment variable (`TS_AUTH_KEY`). No port forwarding or firewall rules needed.
 *   **Private Networking**: Embedded **Tailscale** node (`tsnet`) ensures the service is only accessible to devices in your tailnet.
-*   **Streaming I/O**: Files are streamed directly from Request Body $\to$ Disk. No RAM buffering, allowing upload/download of massive files on low-memory devices (e.g., Raspberry Pi).
-*   **Single Binary**: The Frontend (HTML/JS) and Database logic are compiled into a single executable.
-*   **Metadata Search**: SQLite database stores file metadata for quick listing and retrieval.
+*   **Per-User Isolation**: Files are owned by the caller's Tailscale identity (resolved via `WhoIs`); users only see and manage their own files.
+*   **Resumable, Chunked Uploads**: Multi-file drag-&-drop with per-file progress bars; interrupted uploads resume from the last received byte — even across server restarts. No RAM buffering, so massive files work on low-memory devices (e.g., Raspberry Pi).
+*   **Folders, Search & Pagination**: Organize files into folders; server-side filename search and paginated listings scale past thousands of files.
+*   **Sharing**: Generate tokenized, optionally time-limited public links to individual files.
+*   **Trash**: Deletes are recoverable; files sit in the trash until restored or permanently purged.
+*   **Integrity**: A SHA-256 checksum is computed and stored for every file; per-user quota and free-disk-space guards protect storage.
+*   **Single Binary**: The Frontend (HTML/JS) and Database logic are compiled into a single executable, with previews for images, video, audio, PDF, and text/code/Markdown.
 
 ---
 
@@ -79,20 +83,79 @@ go build -o fastnas.exe ./cmd/server
     *   **Via VPN**: `http://fastnas/` (from any device on your Tailscale network).
     *   **Locally**: `http://localhost:8080/` (for debugging on the host machine).
 
+### Configuration
+
+All configuration is via environment variables:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `TS_AUTH_KEY` | *(empty)* | Tailscale auth key. Without it the node won't authenticate and all requests fall back to the local identity. |
+| `DATA_DIR` | `./data` | Directory for the SQLite DB, uploaded files, thumbnails, and upload temp files. |
+| `TS_HOSTNAME` | `fastnas` | Tailscale node hostname (and the DNS name it's reachable at). |
+| `MAX_UPLOAD_SIZE` | `53687091200` (50 GB) | Max request body in bytes for the legacy single-shot `/upload` (resumable uploads are chunked and unaffected). |
+| `LOCAL_ADDR` | `:8080` | Local debug listener address. Set empty to disable the local listener entirely. |
+| `USER_QUOTA` | `0` (unlimited) | Max total bytes a single user may store (counts trashed files). Uploads that would exceed it are rejected with `403`. |
+| `MIN_FREE_BYTES` | `0` | Refuse an upload unless this many bytes would remain free afterwards. Uploads that don't fit are rejected with `507`. |
+
+---
+
+## 🚢 Deployment
+
+### Docker
+```bash
+docker build -t fastnas .
+docker run -d --name fastnas \
+  -e TS_AUTH_KEY=tskey-auth-... \
+  -v fastnas-data:/var/lib/fastnas \
+  -p 8080:8080 \
+  fastnas
+```
+The Tailscale interface needs no published host ports; `-p 8080:8080` only exposes the optional local listener.
+
+### systemd
+A hardened unit is provided at [`deploy/fastnas.service`](deploy/fastnas.service):
+```bash
+sudo install -m 0755 fastnas /usr/local/bin/fastnas
+echo 'TS_AUTH_KEY=tskey-auth-...' | sudo install -m 0600 /dev/stdin /etc/fastnas.env
+sudo cp deploy/fastnas.service /etc/systemd/system/
+sudo systemctl enable --now fastnas
+```
+
+A `GET /healthz` endpoint (returns `{"status":"ok"}`, or `503` if the DB is unreachable) is available for liveness/readiness probes. The server shuts down gracefully on `SIGINT`/`SIGTERM`.
+
 ---
 
 ## 🔌 API Endpoints
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/upload` | Multipart form upload. Streams to disk. Returns JSON metadata. |
-| `GET` | `/files` | Returns JSON list of all files, sorted by newest. |
-| `GET` | `/download/:uuid` | Streams file content with correct Content-Disposition. |
+| `GET` | `/healthz` | Liveness probe (checks DB connectivity). |
+| `GET` | `/me` | Current resolved Tailscale identity. |
+| `GET` | `/stats` | Aggregate file count and bytes used for the caller. |
+| `GET` | `/files` | Paginated listing of the caller's folder/search results. Params: `folder`, `q`, `page`, `limit`. |
+| `POST` | `/upload` | Legacy single-shot multipart upload (streams to disk). |
+| `POST` | `/uploads` | Start a resumable, chunked upload session. |
+| `PATCH` | `/uploads/:id` | Append a chunk at the `Upload-Offset` header position. |
+| `POST` | `/uploads/:id/complete` | Finalize a completed upload session. |
+| `GET` | `/download/:uuid` | Stream a file (`?preview=true` for inline). |
+| `PATCH` | `/files/:uuid` | Rename and/or move a file. |
+| `DELETE` | `/files/:uuid` | Move a file to the trash (soft delete). |
+| `GET` | `/trash` | List the caller's trashed files. |
+| `POST` | `/files/:uuid/restore` | Restore a file from the trash. |
+| `DELETE` | `/trash/:uuid` | Permanently delete one trashed file. |
+| `DELETE` | `/trash` | Empty the trash (permanent). |
+| `GET`/`POST` | `/folders` | List all folders / create a folder. |
+| `PATCH`/`DELETE` | `/folders/:uuid` | Rename+move / recursively delete a folder. |
+| `POST`/`GET` | `/files/:uuid/shares` | Create / list share links for a file. |
+| `GET` | `/shares/:token` | Public, token-gated access to a shared file. |
+| `DELETE` | `/shares/:token` | Revoke a share link. |
+
+All file/folder endpoints are scoped to the caller's Tailscale identity.
 
 ---
 
 ## 🔮 Future Improvements (Talking Points)
-*   **Chunked Uploads**: For unstable connections, break files into chunks and reassemble.
 *   **S3 Backend**: Replace local disk storage with S3 interface for infinite scalability.
-*   **Authentication**: Add valid OIDC login for user-specific file isolation.
-*   **Image Previews**: Generate thumbnails for uploaded images using a background worker.
+*   **Background thumbnailing**: Pre-generate previews via a worker instead of on first request.
+*   **Content de-duplication**: SHA-256 checksums are already stored per file — collapse identical uploads onto shared storage.
+*   **OIDC / SSO**: Layer an identity provider on top of the Tailscale identity for non-tailnet access.
