@@ -1,0 +1,19 @@
+# Build artifacts
+*.exe
+*.exe~
+bin/
+
+# Runtime state (must not leak into the image)
+data/
+ts-state/
+*.db
+*.db-journal
+*.db-wal
+
+# Tooling / VCS
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
